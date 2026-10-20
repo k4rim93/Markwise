@@ -106,5 +106,56 @@ function updateDetectedSource(){const u=$("url").value.trim();if(!u){$("source")
 let swipeStart=null;
 document.addEventListener("touchstart",e=>{if(e.touches.length===1)swipeStart={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
 document.addEventListener("touchend",e=>{if(!swipeStart||!e.changedTouches.length)return;const dx=e.changedTouches[0].clientX-swipeStart.x,dy=e.changedTouches[0].clientY-swipeStart.y;swipeStart=null;if(Math.abs(dx)<75||Math.abs(dx)<Math.abs(dy)*1.25)return;if($("saveBack").classList.contains("show")||$("catBack").classList.contains("show"))return;if(document.body.classList.contains("collection-detail")){$("collectionBack").click();return}if(!$("settingsView").classList.contains("hidden")){settings(false);document.body.classList.add("home-view");return}}, {passive:true});
+
+/* Markwise Smart UX v5: smart views, safe bulk operations, and local previews */
+(function(){
+ const style=document.createElement("style");
+ style.textContent=".mw5-tools{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}.mw5-tools select{min-height:40px;flex:1;min-width:0;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:11px;padding:0 10px}.mw5-bulk{display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;margin:0 0 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.mw5-bulk select{min-height:38px;flex:1;min-width:130px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:0 8px}.mw5-check{width:19px;height:19px;accent-color:var(--accent);margin:0 5px 5px 0}.mw5-preview{margin-top:8px;padding:9px;border:1px solid var(--line);border-radius:10px;font-size:12px;overflow-wrap:anywhere}.mw5-preview summary{cursor:pointer;color:var(--accent)}.mw5-preview p{color:var(--muted);margin:7px 0 0}";
+ document.head.appendChild(style);
+ const toolbar=document.querySelector(".mw-toolbar"), list=$("list");
+ if(!toolbar||!list)return;
+ const tools=document.createElement("div");tools.className="mw5-tools";
+ const view=document.createElement("select");view.id="mw5View";view.setAttribute("aria-label","Smart views");
+ view.innerHTML='<option value="all">Smart view · All links</option><option value="pinned">Pinned</option><option value="to-read">To read</option><option value="in-progress">In progress</option><option value="done">Completed</option>';
+ tools.append(view);toolbar.insertAdjacentElement("afterend",tools);
+ const bulk=document.createElement("div");bulk.className="mw5-bulk";bulk.id="mw5Bulk";
+ bulk.innerHTML='<strong id="mw5Count">0 selected</strong><select id="mw5Move"><option value="">Move to collection…</option></select><button class="secondary" id="mw5MoveBtn" type="button">Move</button><button class="secondary" id="mw5DeleteBtn" type="button">Delete</button><button class="linkbtn" id="mw5ClearBtn" type="button">Clear</button>';
+ tools.insertAdjacentElement("afterend",bulk);
+ let selected=new Set(), painting=false;
+ function refreshOptions(){const sel=$("mw5Move"),old=sel.value;sel.innerHTML='<option value="">Move to collection…</option>';cats.forEach(c=>{const o=document.createElement("option");o.value=c.name;o.textContent=c.name;sel.append(o)});sel.value=old}
+ function paint(){
+  if(painting)return;painting=true;
+  const cards=[...list.querySelectorAll(".item")];
+  cards.forEach(card=>{
+   const title=card.querySelector(".title")?.textContent||"";
+   const url=card.querySelector(".url")?.textContent||"";
+   const item=items.find(i=>i.url===url.split(" · ").slice(1).join(" · "))||items.find(i=>(i.title||host(i.url))===title);
+   if(!item){painting=false;return}
+   const key=String(item.id);
+   let cb=card.querySelector(".mw5-check");
+   if(!cb){cb=document.createElement("input");cb.type="checkbox";cb.className="mw5-check";cb.setAttribute("aria-label","Select saved link");card.querySelector(".src")?.before(cb);cb.addEventListener("change",()=>{cb.checked?selected.add(key):selected.delete(key);paintBar()})}
+   cb.checked=selected.has(key);
+   const status=item.readStatus||"saved", mode=view.value;
+   card.hidden=mode==="pinned"?!item.pinned:mode==="all"?false:status!==mode;
+   if(!card.querySelector(".mw5-preview")){
+    const d=document.createElement("details");d.className="mw5-preview";
+    const summary=document.createElement("summary");summary.textContent="Preview details";
+    const p=document.createElement("p");p.textContent=item.note||"No personal note saved.";
+    const a=document.createElement("a");a.href=item.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=host(item.url)+" · Open link";a.style.color="var(--accent)";
+    d.append(summary,p,a);card.querySelector(".title")?.parentElement?.append(d)
+   }
+  });
+  painting=false;paintBar();
+ }
+ function paintBar(){bulk.style.display=selected.size?"flex":"none";$("mw5Count").textContent=selected.size+" selected";refreshOptions()}
+ view.addEventListener("change",paint);
+ $("mw5ClearBtn").onclick=()=>{selected.clear();paint()};
+ $("mw5MoveBtn").onclick=()=>{const dest=$("mw5Move").value;if(!dest)return say("Choose a collection first");let n=0;items.forEach(i=>{if(selected.has(String(i.id))){i.category=dest;i.updatedAt=new Date().toISOString();n++}});if(n){save();selected.clear();render();say("Moved "+n+" links")}};
+ $("mw5DeleteBtn").onclick=()=>{const chosen=items.filter(i=>selected.has(String(i.id)));if(!chosen.length)return;if(!confirm("Delete "+chosen.length+" selected links? This action can be recovered only from a backup."))return;const stamp=new Date().toISOString();chosen.forEach(i=>deletedItems.push({id:i.id||null,url:i.url,deletedAt:stamp}));try{localStorage.setItem(DK,JSON.stringify(deletedItems))}catch(e){}items=items.filter(i=>!selected.has(String(i.id)));selected.clear();save();render();say("Deleted selected links")};
+ const baseRender=render;
+ render=function(){baseRender();paint()};
+ refreshOptions();paint();
+})();
+
 if("serviceWorker"in navigator&&location.protocol.startsWith("http"))navigator.serviceWorker.register("./sw.js").catch(()=>{});
 </script></body></html>
