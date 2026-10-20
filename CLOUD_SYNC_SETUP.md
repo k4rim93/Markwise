@@ -10,7 +10,7 @@ Markwise is hosted on GitHub Pages, which has no private server/database. Each b
 2. Open SQL Editor and run `supabase/markwise-schema.sql`.
 3. In Project Settings / API, copy the Project URL and publishable key (or legacy anon key).
 4. Keep the service_role/secret key private; never add it to this repository or browser code.
-5. The app integration must then be configured with the project URL and publishable key, with email sign-in and row-level security.
+5. In Authentication → URL Configuration, add `https://k4rim93.github.io/Markwise/` to the Redirect URLs allowlist (the app sends email magic links back to this URL).\n6. In Authentication → Sign In / Providers, ensure Email is enabled.\n7. The client integration is in `index.html`; it uses only the public publishable key. Test sign-in before merging the PR.
 
 ## Migration safety requirements
 - Do not replace a local library with an empty cloud library automatically.
